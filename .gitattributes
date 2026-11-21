@@ -1,0 +1,2 @@
+# Windows バッチファイルは常に CRLF でチェックアウトする（日本語文字化け・cmd.exe誤動作防止）
+*.bat text eol=crlf

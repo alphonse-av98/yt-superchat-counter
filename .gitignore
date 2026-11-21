@@ -1,8 +1,11 @@
 # 依存パッケージ
 node_modules/
 
-# ビルド成果物
+# ビルド成果物・配布パッケージ作業領域（バイナリはGit管理しない）
 dist/
+runtime/
+release-stage/
+*.zip
 
 # 環境変数ファイル
 .env

@@ -1,0 +1,128 @@
+name: Build Windows Portable Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'リリースするバージョンタグ（例: v1.0.0）'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-portable:
+    runs-on: windows-latest
+    env:
+      NODE_VERSION: '20.19.0'
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: リリース用タグ名を決定
+        id: meta
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ github.event.inputs.tag }}"
+          } else {
+            $tag = "${{ github.ref_name }}"
+          }
+          if (-not $tag.StartsWith("v")) {
+            $tag = "v$tag"
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Release Tag: $tag"
+
+      - name: 依存パッケージをインストールしてビルド
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
+
+      - name: ポータブル配布フォルダを組み立て
+        shell: pwsh
+        run: |
+          $stageRoot = "release-stage"
+          $appDir = Join-Path $stageRoot "yt-superchat-counter"
+          New-Item -ItemType Directory -Force -Path $appDir | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $appDir "data") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $appDir "runtime\node") | Out-Null
+
+          # ビルド済みファイル・フロントエンド・起動バッチ・ドキュメントをコピー
+          Copy-Item -Recurse -Force "dist" (Join-Path $appDir "dist")
+          Copy-Item -Recurse -Force "public" (Join-Path $appDir "public")
+          Copy-Item -Force "package.json", "package-lock.json", ".env.example", "README.md", "LICENSE", "start.bat" $appDir
+          Copy-Item -Force "data\.gitkeep" (Join-Path $appDir "data\.gitkeep")
+
+          # 本番実行に必要な依存パッケージのみを軽量インストール
+          Push-Location $appDir
+          npm ci --omit=dev --no-audit --no-fund
+          Pop-Location
+
+          # 公式 Windows x64 ポータブル版 Node.js を取得して同梱（node.exe + LICENSE）
+          $nodeZipName = "node-v$($env:NODE_VERSION)-win-x64.zip"
+          $nodeUrl = "https://nodejs.org/dist/v$($env:NODE_VERSION)/$nodeZipName"
+          $nodeZipPath = Join-Path $stageRoot $nodeZipName
+          $nodeExtractDir = Join-Path $stageRoot "node-extract"
+
+          Write-Host "Downloading Node.js portable runtime: $nodeUrl"
+          Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZipPath
+          Expand-Archive -Path $nodeZipPath -DestinationPath $nodeExtractDir -Force
+
+          $nodeInnerDir = Join-Path $nodeExtractDir "node-v$($env:NODE_VERSION)-win-x64"
+          Copy-Item -Force (Join-Path $nodeInnerDir "node.exe") (Join-Path $appDir "runtime\node\node.exe")
+          Copy-Item -Force (Join-Path $nodeInnerDir "LICENSE") (Join-Path $appDir "runtime\node\LICENSE")
+
+      - name: 配布用 ZIP を作成
+        id: pack
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $zipName = "yt-superchat-counter-win-x64-$tag.zip"
+          Push-Location "release-stage"
+          tar -a -c -f "..\$zipName" "yt-superchat-counter"
+          Pop-Location
+
+          $sizeMb = [math]::Round((Get-Item $zipName).Length / 1MB, 2)
+          Write-Host "Created $zipName ($sizeMb MB)"
+          "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: GitHub Release を作成・ZIP を添付
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $zipName = "${{ steps.pack.outputs.zip_name }}"
+
+          $notes = @"
+          ## Windows 向けかんたん配布版（Node.js 同梱・コマンド操作不要）
+
+          ### 使い方（3ステップ）
+          1. 下の **Assets** から ``$zipName`` をダウンロードして、すべて展開（解凍）します。
+          2. 展開したフォルダ内の **``start.bat``** をダブルクリックします。
+             - ※ 初回に Windows の保護画面（SmartScreen）が出た場合は **「詳細情報」→「実行」** を押してください。
+          3. ブラウザで管理画面（``http://127.0.0.1:3000/``）が自動で開きます。OBS のブラウザソースに ``http://127.0.0.1:3000/overlay`` を登録してご利用ください！
+
+          > **含まれるランタイム:** Node.js v$($env:NODE_VERSION)（MIT License・同梱済み）
+          "@
+
+          # 同じタグのリリースが既にあれば差し替え、無ければ新規作成
+          gh release view $tag >$null 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zipName --clobber
+          } else {
+            gh release create $tag $zipName --target "${{ github.sha }}" --title "YouTube Live 課金集計ツール $tag" --notes $notes
+          }
