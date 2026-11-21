@@ -2,6 +2,7 @@
   "name": "yt-superchat-counter",
   "version": "1.0.0",
   "description": "YouTube Live配信のSuper Chat・Super Sticker・ギフト課金をリアルタイム集計し、管理画面とOBSオーバーレイで表示するローカルWebツール",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
