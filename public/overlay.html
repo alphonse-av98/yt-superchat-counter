@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBSオーバーレイ - YouTube Live 課金合計</title>
+  <link rel="stylesheet" href="/css/overlay.css" />
+</head>
+<body>
+  <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
+
+  <main id="overlay-stage" class="overlay-stage align-left valign-top">
+    <div id="counter-box" class="counter-box bg-badge stroke-on">
+      <div id="counter-label" class="counter-label">SUPER CHAT TOTAL</div>
+      <div id="counter-amount" class="counter-amount">¥0</div>
+
+      <!-- 目標額・進捗バー（管理画面のON/OFFに連動） -->
+      <div id="goal-block" class="goal-block hidden">
+        <div class="goal-meta">
+          <span id="goal-target-text" class="goal-target-text">目標 ¥0</span>
+          <span id="goal-status-text" class="goal-status-text">0%</span>
+        </div>
+        <div class="goal-bar-track">
+          <div id="goal-bar-fill" class="goal-bar-fill" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/confetti.js"></script>
+  <script src="/js/overlay.js"></script>
+</body>
+</html>

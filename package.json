@@ -1,0 +1,28 @@
+{
+  "name": "yt-superchat-counter",
+  "version": "1.0.0",
+  "description": "YouTube Live配信のSuper Chat・Super Sticker・ギフト課金をリアルタイム集計し、管理画面とOBSオーバーレイで表示するローカルWebツール",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ws": "^8.18.1",
+    "youtubei.js": "^13.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.14",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="aurora">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Live 課金リアルタイム集計ダッシュボード</title>
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <div class="header-title-group">
+        <div class="brand-row">
+          <span class="brand-sparkle" aria-hidden="true">✦</span>
+          <h1>YouTube Live 課金集計ツール</h1>
+        </div>
+        <p class="subtitle">Super Chat・Super Sticker・ギフト課金をリアルタイム集計（メンバーシップ完全除外）</p>
+      </div>
+      <div class="header-actions">
+        <span id="ws-indicator" class="ws-pill ws-disconnected" title="サーバーとのWebSocket接続状態">
+          <span class="dot"></span>
+          <span id="ws-status-text">接続中...</span>
+        </span>
+        <button id="test-toggle-btn" class="btn btn-secondary btn-sm hidden" type="button" aria-expanded="false">
+          テスト表示: OFF
+        </button>
+        <button id="theme-toggle-btn" class="btn btn-secondary btn-sm" type="button">ナイト表示</button>
+      </div>
+    </header>
+
+    <!-- 監視コントロールパネル -->
+    <section class="card monitor-card">
+      <div class="card-header">
+        <h2>配信チャット監視</h2>
+        <div id="monitor-badge" class="status-badge status-idle">待機中</div>
+      </div>
+
+      <form id="monitor-form" class="monitor-form">
+        <div class="input-group">
+          <label for="stream-url-input" class="sr-only">YouTube Live 配信URLまたは動画ID</label>
+          <input
+            id="stream-url-input"
+            type="text"
+            placeholder="YouTube Live のURL または 動画ID を入力（例: https://www.youtube.com/watch?v=...）"
+            autocomplete="off"
+          />
+        </div>
+        <div class="button-row">
+          <button id="start-btn" type="submit" class="btn btn-primary">監視開始</button>
+          <button id="stop-btn" type="button" class="btn btn-secondary" disabled>停止</button>
+          <button id="reset-btn" type="button" class="btn btn-danger-outline">集計リセット</button>
+        </div>
+      </form>
+
+      <div id="stream-meta" class="stream-meta hidden">
+        <span class="meta-item"><strong>配信タイトル:</strong> <span id="stream-title">-</span></span>
+        <span class="meta-item"><strong>チャンネル:</strong> <span id="stream-channel">-</span></span>
+        <span class="meta-item"><strong>動画ID:</strong> <code id="stream-video-id">-</code></span>
+      </div>
+
+      <div id="monitor-error" class="alert alert-error hidden" role="alert"></div>
+
+      <!-- OBSオーバーレイURL案内バー -->
+      <div class="obs-bar">
+        <div class="obs-info">
+          <span class="obs-label">OBSブラウザソース用URL:</span>
+          <code id="obs-url-code" class="obs-url-code"></code>
+        </div>
+        <div class="obs-actions">
+          <button id="copy-obs-url-btn" type="button" class="btn btn-secondary btn-sm">URLコピー</button>
+          <a id="open-obs-link" href="/overlay" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">別タブで確認</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- サマリー指標 -->
+    <section class="summary-grid">
+      <div class="card kpi-card kpi-primary">
+        <div class="kpi-label">日本円換算 総合計</div>
+        <div id="total-jpy" class="kpi-value">¥0</div>
+        <div class="kpi-sub">為替レート概算によるリアルタイム換算</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">集計対象件数</div>
+        <div id="total-count" class="kpi-value-md">0 件</div>
+        <div class="kpi-sub">Super Chat / Sticker / ギフト課金</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">除外済みメンバーシップ</div>
+        <div id="excluded-count" class="kpi-value-md">0 件</div>
+        <div class="kpi-sub">新規加入・継続・メンギフ（金額非加算）</div>
+      </div>
+    </section>
+
+    <!-- 目標額設定カード -->
+    <section class="card goal-card">
+      <div class="card-header">
+        <div class="goal-title-wrap">
+          <h2>目標額設定</h2>
+          <span id="goal-achieved-badge" class="goal-achieved-badge hidden">目標達成！</span>
+        </div>
+        <label class="toggle-switch" for="goal-visible-toggle">
+          <input id="goal-visible-toggle" type="checkbox" />
+          <span class="toggle-slider"></span>
+          <span id="goal-visible-label" class="toggle-label-text">目標額表示: OFF</span>
+        </label>
+      </div>
+
+      <form id="goal-form" class="goal-form">
+        <div class="goal-input-wrap">
+          <span class="currency-prefix">¥</span>
+          <input
+            id="goal-amount-input"
+            type="number"
+            min="0"
+            step="100"
+            placeholder="目標金額を入力（例: 50000）"
+          />
+        </div>
+        <button id="goal-save-btn" type="submit" class="btn btn-primary btn-sm">目標額を設定</button>
+        <div class="goal-presets">
+          <button type="button" class="btn btn-secondary btn-xs" data-goal-preset="5000">¥5,000</button>
+          <button type="button" class="btn btn-secondary btn-xs" data-goal-preset="10000">¥10,000</button>
+          <button type="button" class="btn btn-secondary btn-xs" data-goal-preset="30000">¥30,000</button>
+          <button type="button" class="btn btn-secondary btn-xs" data-goal-preset="50000">¥50,000</button>
+          <button type="button" class="btn btn-secondary btn-xs" data-goal-preset="100000">¥100,000</button>
+        </div>
+      </form>
+
+      <div id="goal-progress-wrap" class="goal-progress-wrap">
+        <div class="goal-progress-header">
+          <span id="goal-progress-text" class="goal-progress-text">目標額が未設定です</span>
+          <span id="goal-progress-percent" class="goal-progress-percent">0%</span>
+        </div>
+        <div class="goal-progress-track">
+          <div id="goal-progress-bar" class="goal-progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="goal-visibility-note" class="goal-visibility-note">
+          目標額表示を ON にすると、OBSオーバーレイに目標額・進捗バーが表示され、達成時に紙吹雪が舞います。
+        </p>
+      </div>
+    </section>
+
+    <!-- 種別内訳 ＆ 通貨別内訳 -->
+    <section class="breakdown-grid">
+      <div class="card">
+        <div class="card-header">
+          <h2>課金種別ごとの内訳</h2>
+        </div>
+        <div id="type-breakdown-list" class="breakdown-list">
+          <!-- JSで描画 -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>通貨別の内訳</h2>
+            <div id="rate-meta-text" class="hint-text">為替レート読み込み中...</div>
+          </div>
+          <button id="refresh-rates-btn" type="button" class="btn btn-secondary btn-sm">レート再取得</button>
+        </div>
+        <div id="currency-breakdown-list" class="breakdown-list">
+          <div class="empty-state">まだ集計データがありません</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 開発モード用テストパネル（ENABLE_TEST_MODE=true のとき表示） -->
+    <section id="test-panel" class="card test-card hidden">
+      <div class="card-header">
+        <h2>開発・動作確認用テストパネル</h2>
+        <span class="dev-tag">TEST MODE</span>
+      </div>
+      <p class="test-desc">
+        配信外でもフィルタリング・通貨換算・OBSオーバーレイのカウントアップ動作を確認できます。
+        メンバーシップ系ボタンを押しても合計金額・件数に加算されないことを確認してください。
+      </p>
+      <div class="test-button-groups">
+        <div class="test-group">
+          <span class="test-group-label">集計対象イベント（加算される）</span>
+          <div class="test-buttons">
+            <button type="button" class="btn btn-accent btn-sm" data-simulate="super_chat_jpy">+ スパチャ ¥1,000</button>
+            <button type="button" class="btn btn-accent btn-sm" data-simulate="super_chat_usd">+ スパチャ $10.00</button>
+            <button type="button" class="btn btn-accent btn-sm" data-simulate="super_chat_twd">+ スパチャ NT$150</button>
+            <button type="button" class="btn btn-accent btn-sm" data-simulate="super_sticker">+ ステッカー ¥500</button>
+            <button type="button" class="btn btn-accent btn-sm" data-simulate="gift_jewel">+ ギフト 200ジュエル</button>
+          </div>
+        </div>
+        <div class="test-group">
+          <span class="test-group-label">除外対象イベント（無視される）</span>
+          <div class="test-buttons">
+            <button type="button" class="btn btn-muted btn-sm" data-simulate="membership_new">× メンバー新規加入</button>
+            <button type="button" class="btn btn-muted btn-sm" data-simulate="membership_milestone">× メンバー継続</button>
+            <button type="button" class="btn btn-muted btn-sm" data-simulate="membership_gift">× メンバーシップギフト</button>
+          </div>
+        </div>
+        <div class="test-group">
+          <span class="test-group-label">演出テスト（OBSオーバーレイ連動）</span>
+          <div class="test-buttons">
+            <button id="test-confetti-btn" type="button" class="btn btn-secondary btn-sm">🎉 紙吹雪エフェクトをテスト</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 直近の課金履歴 -->
+    <section class="card history-card">
+      <div class="card-header">
+        <div>
+          <h2>課金履歴</h2>
+          <span id="history-count-label" class="hint-text">0 件表示</span>
+        </div>
+        <a id="csv-download-btn" href="/api/export/csv" class="btn btn-primary btn-sm">CSVダウンロード（UTF-8 BOM付）</a>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>日時</th>
+              <th>ユーザー名</th>
+              <th>種別</th>
+              <th>元金額</th>
+              <th class="text-right">日本円換算</th>
+              <th>メッセージ</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr>
+              <td colspan="6" class="empty-cell">課金イベントを受信するとここにリアルタイム表示されます</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- トースト通知エリア -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

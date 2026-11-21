@@ -1,0 +1,20 @@
+# 依存パッケージ
+node_modules/
+
+# ビルド成果物
+dist/
+
+# 環境変数ファイル
+.env
+.env.local
+
+# セッション保存データ（.gitkeep は除外しない）
+data/*.json
+data/*.tmp
+data/*.csv
+
+# ログ・OS生成ファイル
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
